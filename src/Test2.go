@@ -49,8 +49,13 @@ type WalletAccount struct {
 	LedgerBalance float32 `json:"ledger_balance" bson:"ledger_balance"`
 }
 
-type MsgBody struct {
+type MsgBodySuccess struct {
 	RsBody RsBody `json:"rsBody"`
+	//Error ErrorList `json:"error"`
+}
+
+type MsgBodyError struct {
+	//RsBody RsBody `json:"rsBody"`
 	Error ErrorList `json:"error"`
 }
 
@@ -126,12 +131,13 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 			errorlst.Error = append(errorlst.Error,Error{"003", "Incorrect Name"})
 		}
 
+		c := session.DB("wallets").C("accounts")
+		currentid,err:= c.Count()
+		wwid, _ :=strconv.Atoi(generateWalletID(currentid))
 		accounts.FullName=strings.ToUpper(accounts.FullName)
-		accounts.WalletID=1234567890
+		accounts.WalletID=wwid
 		accounts.OpenDateTime = time.Now().Format("2006-01-02 15:04:05+0700")
 		accounts.LedgerBalance = 0.00
-
-		c := session.DB("wallets").C("accounts")
 
 		err = c.Insert(accounts)
 		if err != nil {
@@ -141,23 +147,38 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 
 			//errorlst.Error = append(errorlst.Error,Error{"999", "Database Error"})
 		}
+		msgbodysuccess :=MsgBodySuccess{}
+		msgbodyer :=MsgBodyError{}
+		if len(errorlst.Error)==0 {
+			respbody := RsBody{
+				OpenDateTime:accounts.OpenDateTime,
+				WalletID:accounts.WalletID,
+			}
+			msgbodysuccess.RsBody=respbody
+			respBody, err := json.MarshalIndent(msgbodysuccess, "", "  ")
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		respbody := RsBody{
-			OpenDateTime:accounts.OpenDateTime,
-			WalletID:accounts.WalletID,
+			ResponseWithJSON(w, respBody, http.StatusCreated)
+
+		} else {
+			msgbodyer.Error = errorlst
+			respBody, err := json.MarshalIndent(msgbodyer, "", "  ")
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			ResponseWithJSON(w, respBody, http.StatusCreated)
 		}
+		//MsgBodyError{}.Error = errorlst
 
-
-		msgbody :=MsgBody{
-			respbody,
-			errorlst,
-		}
-		respBody, err := json.MarshalIndent(msgbody, "", "  ")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		ResponseWithJSON(w, respBody, http.StatusCreated)
+		//respBody, err := json.MarshalIndent(msgbody, "", "  ")
+		//if err != nil {
+		//	log.Fatal(err)
+		//}
+		//
+		//ResponseWithJSON(w, respBody, http.StatusCreated)
 
 	}
 }
@@ -211,7 +232,21 @@ func LenCitizenId(i int) bool {
 	return false
 }
 
-var walletId = randInt(0,9999999999)
+func generateWalletID(currentid int) string {
+	currentid++
+	wall := fmt.Sprintf("%010d", currentid)
+	sum:=0
+	for v,i := range(wall) {
+		intValue, _ := strconv.Atoi(string(i))
+		//fmt.Println("--------------------------------------------------")
+		//fmt.Println(intValue + " " + v+1 )
+		sum+=intValue*int(v+2)
+
+	}
+
+	sum=sum%10
+	return "1"+wall+strconv.Itoa(sum)
+}
 
 func newUUID() (string) {
 	uuid := make([]byte, 16)
