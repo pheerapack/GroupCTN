@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"fmt"
 
+	"strconv"
 )
 
 func ErrorWithJSON(w http.ResponseWriter, json []byte, code int) {
@@ -50,7 +51,7 @@ type WalletAccount struct {
 
 type MsgBody struct {
 	RsBody RsBody `json:"rsBody"`
-	Error Error `json:"error"`
+	Error ErrorList `json:"error"`
 }
 
 type RsBody struct {
@@ -64,7 +65,7 @@ type Error struct {
 }
 
 type ErrorList struct {
-	Error Error
+	Error []Error
 }
 
 func main() {
@@ -110,24 +111,19 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		defer session.Close()
 
 		var accounts WalletAccount
-		var error Error
+		var errorlst ErrorList
 
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&accounts)
 		if err != nil {
-			//error = append(
-
-			return
+			errorlst.Error = append(errorlst.Error,Error{"999", "Incorrect Body"})
+		}
+		if !LenCitizenId(accounts.CitizenID) {
+			errorlst.Error = append(errorlst.Error,Error{"001", "Incorrect Citizen ID"})
 		}
 
 		if (!IsLetter(accounts.FullName)) || (!Len(accounts.FullName)) {
-			ErrorWithJSON(w, "Incorrect Full Name", http.StatusBadRequest)
-			return
-		}
-
-		if LenCitizenId(accounts.CitizenID) {
-			ErrorWithJSON(w, "Incorrect Citizen ID", http.StatusBadRequest)
-			return
+			errorlst.Error = append(errorlst.Error,Error{"003", "Incorrect Name"})
 		}
 
 		accounts.FullName=strings.ToUpper(accounts.FullName)
@@ -140,30 +136,22 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		err = c.Insert(accounts)
 		if err != nil {
 			if mgo.IsDup(err) {
-				ErrorWithJSON(w, "Accounts with this Citizen ID already exists", http.StatusBadRequest)
-				return
+				errorlst.Error = append(errorlst.Error,Error{"002", "Duplicate Citizen ID"})
 			}
 
-			ErrorWithJSON(w, "Database error", http.StatusInternalServerError)
-			log.Println("Failed insert accounts: ", err)
-			return
+			//errorlst.Error = append(errorlst.Error,Error{"999", "Database Error"})
 		}
 
 		respbody := RsBody{
 			OpenDateTime:accounts.OpenDateTime,
 			WalletID:accounts.WalletID,
 		}
-		error := Error{
-			ErCode:"",
-			ErDesc:"",
-		}
+
 
 		msgbody :=MsgBody{
 			respbody,
-			error,
+			errorlst,
 		}
-
-		fmt.Println(msgbody)
 		respBody, err := json.MarshalIndent(msgbody, "", "  ")
 		if err != nil {
 			log.Fatal(err)
@@ -217,7 +205,7 @@ func Len(s string) bool {
 }
 
 func LenCitizenId(i int) bool {
-	if len(string(i))==13 {
+	if len(strconv.Itoa(i))==13 {
 		return true
 	}
 	return false
