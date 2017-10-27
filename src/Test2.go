@@ -11,14 +11,20 @@ import (
 	//"gopkg.in/mgo.v2/bson"
 	"strings"
 	"gopkg.in/mgo.v2/bson"
-	"math/rand"
+	rand "math/rand"
 	"fmt"
+	rand2 "crypto/rand"
 
 	"strconv"
+	"io"
 )
 
+
+
 func ErrorWithJSON(w http.ResponseWriter, json []byte, code int) {
-	w.Header().Set("x-request-id", newUUID())
+	var uuid, _ = newUUID()
+
+	w.Header().Set("x-request-id", uuid)
 	w.Header().Set("datetime", time.Now().Format("2006-01-02 15:04:05+0700"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-roundtrip", "")
@@ -30,7 +36,9 @@ func ErrorWithJSON(w http.ResponseWriter, json []byte, code int) {
 }
 
 func ResponseWithJSON(w http.ResponseWriter, json []byte, code int) {
-	w.Header().Set("x-request-id", newUUID())
+	var uuid, _ = newUUID()
+
+	w.Header().Set("x-request-id", uuid)
 	w.Header().Set("datetime", time.Now().Format("2006-01-02 15:04:05+0700"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-roundtrip", "")
@@ -136,7 +144,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		wwid, _ :=strconv.Atoi(generateWalletID(currentid))
 		accounts.FullName=strings.ToUpper(accounts.FullName)
 		accounts.WalletID=wwid
-		accounts.OpenDateTime = time.Now().Format("2006-01-02 15:04:05+0700")
+		accounts.OpenDateTime = time.Now().Format("2006-01-02 15:04:05 GMT+0700")
 		accounts.LedgerBalance = 0.00
 
 		err = c.Insert(accounts)
@@ -169,7 +177,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 				log.Fatal(err)
 			}
 
-			ResponseWithJSON(w, respBody, http.StatusCreated)
+			ResponseWithJSON(w, respBody, http.StatusBadRequest)
 		}
 		//MsgBodyError{}.Error = errorlst
 
@@ -248,17 +256,17 @@ func generateWalletID(currentid int) string {
 	return "1"+wall+strconv.Itoa(sum)
 }
 
-func newUUID() (string) {
+func newUUID() (string, error) {
 	uuid := make([]byte, 16)
-	//n, err := io.ReadFull(rand.Reader, uuid)
-	//if n != len(uuid) || err != nil {
-	//	return "", err
-	//}
+	n, err := io.ReadFull(rand2.Reader, uuid)
+	if n != len(uuid) || err != nil {
+		return "", err
+	}
 	// variant bits; see section 4.1.1
 	uuid[8] = uuid[8]&^0xc0 | 0x80
 	// version 4 (pseudo-random); see section 4.1.3
 	uuid[6] = uuid[6]&^0xf0 | 0x40
-	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:])
+	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
 
 func randInt(min int, max int) int {
