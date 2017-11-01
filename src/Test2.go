@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"github.com/gorilla/mux"
+	"gopkg.in/mux"
 	"gopkg.in/mgo.v2"
 	"time"
 	"regexp"
@@ -19,31 +19,33 @@ import (
 	"io"
 )
 
-
-
+/*
 func ErrorWithJSON(w http.ResponseWriter, json []byte, code int) {
 	var uuid, _ = newUUID()
+	jobid := strconv.Itoa(randInt())
 
 	w.Header().Set("x-request-id", uuid)
 	w.Header().Set("datetime", time.Now().Format("2006-01-02 15:04:05+0700"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-roundtrip", "")
-	w.Header().Set("x-job-id", "")
+	w.Header().Set("x-job-id", jobid)
 
 	//w.WriteHeader(code)
 	//fmt.Fprintf(w, "{message: %q}", message)
 	w.Write(json)
 }
+*/
 
 func ResponseWithJSON(w http.ResponseWriter, json []byte, code int) {
 	var uuid, _ = newUUID()
+	jobid := strconv.Itoa(randInt())
 
 	w.Header().Set("x-request-id", uuid)
 	w.Header().Set("datetime", time.Now().Format("2006-01-02 15:04:05+0700"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("x-roundtrip", "")
-	w.Header().Set("x-job-id", "")
-	//w.WriteHeader(code)
+	w.Header().Set("x-job-id", jobid)
+	w.WriteHeader(code)
 	//w.Write(json)
 	w.Write(json)
 }
@@ -149,13 +151,13 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		accounts.OpenDateTime = time.Now().Format("2006-01-02 15:04:05 GMT+0700")
 		accounts.LedgerBalance = 0.00
 
-		err = c.Insert(accounts)
-		if err != nil {
-			if mgo.IsDup(err) {
-				errorlist.Error = append(errorlist.Error,Error{"002", "Duplicate Citizen ID"})
+		if len(errorlist.Error)==0 {
+			err = c.Insert(accounts)
+			if err != nil {
+				if mgo.IsDup(err) {
+					errorlist.Error = append(errorlist.Error, Error{"002", "Duplicate Citizen ID"})
+				}
 			}
-
-			//errorlist.Error = append(errorlist.Error,Error{"999", "Database Error"})
 		}
 		msgbodysuccess :=MsgBodySuccess{}
 		msgbodyer :=MsgBodyError{}
@@ -169,7 +171,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				log.Fatal(err)
 			}
-
+			log.Println("Success")
 			ResponseWithJSON(w, respBody, http.StatusCreated)
 
 		} else {
@@ -178,17 +180,9 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				log.Fatal(err)
 			}
-
+			log.Println("Error")
 			ResponseWithJSON(w, respBody, http.StatusBadRequest)
 		}
-		//MsgBodyError{}.Error = errorlist
-
-		//respBody, err := json.MarshalIndent(msgbody, "", "  ")
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//
-		//ResponseWithJSON(w, respBody, http.StatusCreated)
 
 	}
 }
@@ -368,8 +362,8 @@ func newUUID() (string, error) {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
 
-func randInt(min int, max int) int {
-	return min + rand.Intn(max-min)
+func randInt() (int) {
+	return rand.Intn(9999999999)
 }
 
 
