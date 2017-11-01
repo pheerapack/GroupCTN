@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"gopkg.in/mux"
+	"github.com/gorilla/mux"
 	"gopkg.in/mgo.v2"
 	"time"
 	"regexp"
@@ -92,10 +92,12 @@ func main() {
 	ensureIndex(session)
 
 	mux := mux.NewRouter()
-	//mux.HandleFunc("/v1/accounts/{wallet_id}", getAccountByWalletID(session)).Methods("GET")
+	mux.HandleFunc("/v1/accounts/{wallet_id}", getAccountByWalletID(session)).Methods("GET")
+	mux.HandleFunc("/v1/accounts/search", getAccountByFullName(session)).Methods("GET")
+	mux.HandleFunc("/v1/accounts/search", getAccountByCitizenID(session)).Methods("GET")
 	mux.HandleFunc("/v1/accounts", createWallets(session)).Methods("POST")
 	//http.ListenAndServe("localhost:5000", mux)
-	log.Fatal(http.ListenAndServe("localhost:3333", mux))
+	log.Fatal(http.ListenAndServe("localhost:3334", mux))
 }
 
 func ensureIndex(s *mgo.Session) {
@@ -124,19 +126,19 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		defer session.Close()
 
 		var accounts WalletAccount
-		var errorlst ErrorList
+		var errorlist ErrorList
 
 		decoder := json.NewDecoder(r.Body)
 		err := decoder.Decode(&accounts)
 		if err != nil {
-			errorlst.Error = append(errorlst.Error,Error{"999", "Incorrect Body"})
+			errorlist.Error = append(errorlist.Error,Error{"999", "Incorrect Body"})
 		}
 		if !LenCitizenId(accounts.CitizenID) {
-			errorlst.Error = append(errorlst.Error,Error{"001", "Incorrect Citizen ID"})
+			errorlist.Error = append(errorlist.Error,Error{"001", "Incorrect Citizen ID"})
 		}
 
 		if (!IsLetter(accounts.FullName)) || (!Len(accounts.FullName)) {
-			errorlst.Error = append(errorlst.Error,Error{"003", "Incorrect Name"})
+			errorlist.Error = append(errorlist.Error,Error{"003", "Incorrect Name"})
 		}
 
 		c := session.DB("wallets").C("accounts")
@@ -150,14 +152,14 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 		err = c.Insert(accounts)
 		if err != nil {
 			if mgo.IsDup(err) {
-				errorlst.Error = append(errorlst.Error,Error{"002", "Duplicate Citizen ID"})
+				errorlist.Error = append(errorlist.Error,Error{"002", "Duplicate Citizen ID"})
 			}
 
-			//errorlst.Error = append(errorlst.Error,Error{"999", "Database Error"})
+			//errorlist.Error = append(errorlist.Error,Error{"999", "Database Error"})
 		}
 		msgbodysuccess :=MsgBodySuccess{}
 		msgbodyer :=MsgBodyError{}
-		if len(errorlst.Error)==0 {
+		if len(errorlist.Error)==0 {
 			respbody := RsBody{
 				OpenDateTime:accounts.OpenDateTime,
 				WalletID:accounts.WalletID,
@@ -171,7 +173,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 			ResponseWithJSON(w, respBody, http.StatusCreated)
 
 		} else {
-			msgbodyer.Error = errorlst
+			msgbodyer.Error = errorlist
 			respBody, err := json.MarshalIndent(msgbodyer, "", "  ")
 			if err != nil {
 				log.Fatal(err)
@@ -179,7 +181,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 
 			ResponseWithJSON(w, respBody, http.StatusBadRequest)
 		}
-		//MsgBodyError{}.Error = errorlst
+		//MsgBodyError{}.Error = errorlist
 
 		//respBody, err := json.MarshalIndent(msgbody, "", "  ")
 		//if err != nil {
@@ -191,7 +193,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-/*
+
 func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := s.Copy()
@@ -204,17 +206,22 @@ func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Re
 
 		var accounts WalletAccount
 		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
+		var errorlt ErrorLT
+
+
 		if err != nil {
-			ErrorWithJSON(w, "Database error", http.StatusInternalServerError)
-			log.Println("Failed find wallet_id: ", err)
+			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:string(err.Error())})
+			HeaderJSON(w,http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(errorlt)
+			log.Println("Failed find Account : ", err)
 			return
 		}
-
+/*
 		if accounts.WalletID == nil {
 			ErrorWithJSON(w, "Book not found", http.StatusNotFound)
 			return
 		}
-
+*/
 		respBody, err := json.MarshalIndent(accounts, "", "  ")
 		if err != nil {
 			log.Fatal(err)
@@ -223,7 +230,75 @@ func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Re
 		ResponseWithJSON(w, respBody, http.StatusOK)
 	}
 }
-*/
+
+
+func getAccountByFullName(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := s.Copy()
+		defer session.Close()
+
+		vars := mux.Vars(r)
+		wallets := vars["wallet_id"]
+
+		c := session.DB("wallets").C("accounts")
+
+		var accounts WalletAccount
+		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
+
+		/*
+				if err != nil {
+					ErrorWithJSON(w, "Database error", http.StatusInternalServerError)
+					log.Println("Failed find wallet_id: ", err)
+					return
+				}
+
+				if accounts.WalletID == nil {
+					ErrorWithJSON(w, "Book not found", http.StatusNotFound)
+					return
+				}
+		*/
+		respBody, err := json.MarshalIndent(accounts, "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		ResponseWithJSON(w, respBody, http.StatusOK)
+	}
+}
+
+func getAccountByCitizenID(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := s.Copy()
+		defer session.Close()
+
+		vars := mux.Vars(r)
+		wallets := vars["wallet_id"]
+
+		c := session.DB("wallets").C("accounts")
+
+		var accounts WalletAccount
+		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
+
+		/*
+				if err != nil {
+					ErrorWithJSON(w, "Database error", http.StatusInternalServerError)
+					log.Println("Failed find wallet_id: ", err)
+					return
+				}
+
+				if accounts.WalletID == nil {
+					ErrorWithJSON(w, "Book not found", http.StatusNotFound)
+					return
+				}
+		*/
+		respBody, err := json.MarshalIndent(accounts, "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		ResponseWithJSON(w, respBody, http.StatusOK)
+	}
+}
 var IsLetter = regexp.MustCompile(`^[a-zA-Z.,-]+( [a-zA-Z.,-]+)+$`).MatchString
 
 func Len(s string) bool {
