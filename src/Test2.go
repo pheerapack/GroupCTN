@@ -206,16 +206,6 @@ func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Re
 
 		var accounts WalletAccount
 		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
-		var errorlt ErrorLT
-
-
-		if err != nil {
-			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:string(err.Error())})
-			HeaderJSON(w,http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(errorlt)
-			log.Println("Failed find Account : ", err)
-			return
-		}
 /*
 		if accounts.WalletID == nil {
 			ErrorWithJSON(w, "Book not found", http.StatusNotFound)
