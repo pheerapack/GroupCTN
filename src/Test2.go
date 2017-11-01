@@ -11,7 +11,7 @@ import (
 	//"gopkg.in/mgo.v2/bson"
 	"strings"
 	"gopkg.in/mgo.v2/bson"
-	rand "math/rand"
+	"math/rand"
 	"fmt"
 	rand2 "crypto/rand"
 
@@ -93,8 +93,8 @@ func main() {
 
 	mux := mux.NewRouter()
 	mux.HandleFunc("/v1/accounts/{wallet_id}", getAccountByWalletID(session)).Methods("GET")
-	mux.HandleFunc("/v1/accounts/search", getAccountByFullName(session)).Methods("GET")
-	mux.HandleFunc("/v1/accounts/search", getAccountByCitizenID(session)).Methods("GET")
+	//mux.HandleFunc("/v1/accounts/search", getAccountByFullName(session)).Methods("GET")
+	//mux.HandleFunc("/v1/accounts", getAccountByCitizenID(session)).Methods("GET")
 	mux.HandleFunc("/v1/accounts", createWallets(session)).Methods("POST")
 	//http.ListenAndServe("localhost:5000", mux)
 	log.Fatal(http.ListenAndServe("localhost:3334", mux))
@@ -195,6 +195,7 @@ func createWallets(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 
 
 func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
+	/*
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := s.Copy()
 		defer session.Close()
@@ -205,18 +206,51 @@ func getAccountByWalletID(s *mgo.Session) func(w http.ResponseWriter, r *http.Re
 		c := session.DB("wallets").C("accounts")
 
 		var accounts WalletAccount
+		//var errorlist ErrorList
 		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
-/*
-		if accounts.WalletID == nil {
-			ErrorWithJSON(w, "Book not found", http.StatusNotFound)
+
+		/*
+		if err != nil {
+			errorlist.Error = append(errorlist.Error,Error{"003", "Database error"})
+			log.Println("Failed find book: ", err)
 			return
 		}
-*/
+
+		The zero values for integer and floats is 0. nil is not a valid integer or float value.
+		A pointer to an integer or a float can be nil, but not its value.
+
+
+		var intPointer *int
+		intValue := accounts.WalletID
+		intPointer = &intValue
+
+		if intPointer == nil {
+			errorlist.Error = append(errorlist.Error,Error{"003", "Incorrect Name"})
+			return
+		}
+
 		respBody, err := json.MarshalIndent(accounts, "", "  ")
 		if err != nil {
 			log.Fatal(err)
 		}
+		ResponseWithJSON(w, respBody, http.StatusOK)
+	}
+	*/
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := s.Copy()
+		defer session.Close()
 
+		vars := mux.Vars(r)
+		wallets := vars["wallet_id"]
+
+		c := session.DB("wallets").C("accounts")
+		var accounts WalletAccount
+		err := c.Find(bson.M{"wallet_id": wallets}).One(&accounts)
+
+		respBody, err := json.MarshalIndent(accounts, "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
 		ResponseWithJSON(w, respBody, http.StatusOK)
 	}
 }
